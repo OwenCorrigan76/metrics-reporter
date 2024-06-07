@@ -8,10 +8,8 @@ import io.prometheus.client.exporter.HTTPServer;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -49,6 +47,8 @@ public class PrometheusMetricsReporterConfigTest {
         assertTrue(config.isAllowed("kafka_server_metric"));
         assertTrue(config.isAllowed("kafka_network_metric"));
     }
+
+
 
     @Test
     public void testListenerParseListener() {
@@ -111,5 +111,43 @@ public class PrometheusMetricsReporterConfigTest {
         assertTrue(httpServerOptional.isEmpty());
         assertFalse(config.isListenerEnabled());
     }
+
+    @Test
+    public void testCompileAllowlistWithValidPatterns() {
+        Map<String, String> props = new HashMap<>();
+        props.put(PrometheusMetricsReporterConfig.ALLOWLIST_CONFIG, "kafka_server.*,metrics_.*,.*_total");
+        PrometheusMetricsReporterConfig config = new PrometheusMetricsReporterConfig(props);
+
+        Pattern compiledPattern = config.compileAllowlist(Arrays.asList("kafka_server.*", "metrics_.*", ".*_total"));
+
+        assertTrue(compiledPattern.matcher("kafka_server_heartbeat_metrics_failed_reauthentication_total").matches());
+        assertTrue(compiledPattern.matcher("metrics_latency_avg").matches());
+        assertTrue(compiledPattern.matcher("some_metric_total").matches());
+    }
+
+    @Test
+    public void testCompileAllowlistWithInvalidPatterns() {
+        Map<String, String> props = new HashMap<>();
+        props.put(PrometheusMetricsReporterConfig.ALLOWLIST_CONFIG, "kafka_server.*,metrics_[a,o],.*_total");
+        PrometheusMetricsReporterConfig config = new PrometheusMetricsReporterConfig(props);
+
+        Pattern compiledPattern = config.compileAllowlist(Arrays.asList("kafka_server.*", "metrics_[", ".*_total"));
+
+        assertTrue(compiledPattern.matcher("kafka_server_heartbeat_metrics_failed_reauthentication_total").matches());
+        assertFalse(compiledPattern.matcher("metrics,_latency,_avg").matches());  // Invalid pattern "metrics_["
+        assertTrue(compiledPattern.matcher("some_metric_total").matches());
+    }
+
+    @Test
+    public void testCompileAllowlistWithEmptyList() {
+        Map<String, String> props = new HashMap<>();
+        props.put(PrometheusMetricsReporterConfig.ALLOWLIST_CONFIG, "");
+        PrometheusMetricsReporterConfig config = new PrometheusMetricsReporterConfig(props);
+
+        Pattern compiledPattern = config.compileAllowlist(Collections.emptyList());
+
+        assertFalse(compiledPattern.matcher("kafka_server_heartbeat_metrics_failed_reauthentication_total").matches());
+    }
+
 }
 

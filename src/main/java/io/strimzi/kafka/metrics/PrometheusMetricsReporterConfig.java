@@ -13,16 +13,18 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.BindException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
-* Configuration for the PrometheusMetricsReporter implementation.
-*/
+ * Configuration for the PrometheusMetricsReporter implementation.
+ */
 public class PrometheusMetricsReporterConfig extends AbstractConfig {
 
     private static final Logger LOG = LoggerFactory.getLogger(PrometheusMetricsReporterConfig.class.getName());
@@ -92,9 +94,34 @@ public class PrometheusMetricsReporterConfig extends AbstractConfig {
         return allowlist.matcher(name).matches();
     }
 
+//        private Pattern compileAllowlist(List<String> allowlist) {
+//        String joined = String.join("|", allowlist);
+//        return Pattern.compile(joined);
+//    }
+
     private Pattern compileAllowlist(List<String> allowlist) {
-        String joined = String.join("|", allowlist);
-        return Pattern.compile(joined);
+        List<String> validatedPatterns = new ArrayList<>();
+
+        // Validate each regex pattern individually and add them to the validated patterns list
+        for (String pattern : allowlist) {
+            try {
+                Pattern.compile(pattern);
+                validatedPatterns.add(pattern);
+                LOG.info("Added pattern to allowlist: {}", pattern);
+            } catch (PatternSyntaxException e) {
+                LOG.warn("Invalid regex pattern in allowlist: {}", pattern, e);
+            }
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (String pattern : validatedPatterns) {
+            if (sb.length() > 0) {
+                sb.append("|");
+            }
+            sb.append("(").append(pattern).append(")");
+        }
+        //(a)|(b)|(c)
+        return Pattern.compile(sb.toString());
     }
 
     /**
@@ -171,12 +198,12 @@ public class PrometheusMetricsReporterConfig extends AbstractConfig {
         }
 
         @Override
-         public String toString() {
+        public String toString() {
             return "http://" + host + ":" + port;
         }
 
         @Override
-         public boolean equals(Object o) {
+        public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             Listener listener = (Listener) o;
@@ -184,7 +211,7 @@ public class PrometheusMetricsReporterConfig extends AbstractConfig {
         }
 
         @Override
-         public int hashCode() {
+        public int hashCode() {
             return Objects.hash(host, port);
         }
     }
